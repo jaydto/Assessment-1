@@ -113,6 +113,7 @@ make run_notebook_view
 
 ```
 make fetch_users
+make clean_notebooks
 make load_data
 make run_notebook
 ```
@@ -121,6 +122,7 @@ make run_notebook
 
 - `Nb:// make run_notebook` will create a separate `.ipynb` that has been run and show results.
 - `Nb:// make run_notebook_view` will take you to the notebook to see it.
+- `Nb:// make clean_notebooks` will clean your notebook records.
 
 ## Run Analysis
 
