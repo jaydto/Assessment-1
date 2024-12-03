@@ -428,7 +428,8 @@ class UserAnalysis:
         plot_similarity_heatmap(gender_data, employment_data_full)
         """))
         
-        
+        nb.cells.append(nbf.v4.new_markdown_cell("### similarity between users using fuzzy match"))
+
         # Step 2: Find similar users
         similar_users = self.find_similar_users()
 
@@ -446,28 +447,26 @@ class UserAnalysis:
             ]
         )
         logger.debug(f"DataFrame Head: {similar_users_df.head()}")
- 
-    
+   
 
         # Add the DataFrame to the notebook
-        # nb.cells.append(nbf.v4.new_code_cell(f"similar_users_df = {similar_users_df.to_dict(orient='records')}"))
         nb.cells.append(
-            nbf.v4.new_code_cell(
-                """
-                similar_users_df = pd.DataFrame(
+        nbf.v4.new_code_cell(
+        f"""
+        similar_users_df = pd.DataFrame(
                     {similar_users}, 
                     columns=[
-                        'User 1', 
-                        'User 2', 
-                        'Username Similarity', 
-                        'Gender Match', 
-                        'Employment Similarity', 
-                        'Address Similarity', 
-                        'Subscription Similarity'
+                        "User 1", 
+                        "User 2", 
+                        "Username Similarity", 
+                        "Gender Match", 
+                        "Employment Similarity", 
+                        "Address Similarity", 
+                        "Subscription Similarity"
                     ]
-                )
-                """
-            )
+                )               
+        """
+        )
         )
         nb.cells.append(nbf.v4.new_markdown_cell("### Data preview"))
         nb.cells.append(nbf.v4.new_code_cell("similar_users_df.head()"))
