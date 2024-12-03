@@ -27,7 +27,6 @@ run_analysis: fetch_users load_data
 	@echo "Workflow completed successfully!"
 
 clean_notebooks:
-	> notebooks/analysis.ipynb
 	> notebooks/user_analysis.ipynb
 	> notebooks/user_analysis.nbconvert.ipynb
 
@@ -36,7 +35,6 @@ clean_notebooks:
 clean:
 	rm -rf logs
 	> data/random_users.csv
-	> notebooks/analysis.ipynb
 	> notebooks/user_analysis.ipynb
 	> notebooks/user_analysis.nbconvert.ipynb
 	@echo "Cleaned up logs and notebooks and csv!"
