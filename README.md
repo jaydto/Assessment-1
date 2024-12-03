@@ -36,7 +36,7 @@ This project fetches random user data from an API, stores it in an SQLite databa
 ## Analysis Output
 - The output of the analysis is stored in a Jupyter notebook:
 
-- File Location: `notebooks/analysis.ipynb`
+- File Location: `notebooks/user_analysis.ipynb`
 
 ### Visualizations Included:
 - Distribution of username similarity scores.
@@ -49,7 +49,7 @@ This project fetches random user data from an API, stores it in an SQLite databa
 `pip install notebook`
 - Open the notebook:
 
-`jupyter notebook notebooks/analysis.ipynb`
+`jupyter notebook notebooks/user_analysis.ipynb`
 
 ## Project Structure
 ### The project is organized as follows: 
@@ -64,7 +64,7 @@ This project fetches random user data from an API, stores it in an SQLite databa
 ├── logs
 │   └── app.log  # Log file saved here
 ├── notebooks
-│   └── analysis.ipynb
+│   └── user_analysis.ipynb
 ├── requirements.txt
 └── scripts
     ├── fetch_users.py
@@ -113,6 +113,7 @@ make run_notebook_view
 
 ```
 make fetch_users
+make clean_notebooks
 make load_data
 make run_notebook
 ```
@@ -121,6 +122,7 @@ make run_notebook
 
 - `Nb:// make run_notebook` will create a separate `.ipynb` that has been run and show results.
 - `Nb:// make run_notebook_view` will take you to the notebook to see it.
+- `Nb:// make clean_notebooks` will clean your notebook records.
 
 ## Run Analysis
 

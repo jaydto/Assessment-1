@@ -17,18 +17,24 @@ load_data:
 	$(PYTHON) $(LOAD_DATA_SCRIPT)
 
 run_notebook:
-	jupyter nbconvert --to notebook --execute notebooks/analysis.ipynb
+	jupyter nbconvert --to notebook --execute notebooks/user_analysis.ipynb
 
 run_notebook_view:
-	`jupyter notebook notebooks/analysis.ipynb
+	jupyter notebook notebooks/user_analysis.ipynb
 
 # Run the entire workflow
 run_analysis: fetch_users load_data
 	@echo "Workflow completed successfully!"
 
+clean_notebooks:
+	> notebooks/user_analysis.ipynb
+	> notebooks/user_analysis.nbconvert.ipynb
+
+
 # Clean up intermediate files or outputs
 clean:
 	rm -rf logs
 	> data/random_users.csv
-	> notebooks/analysis.ipynb
+	> notebooks/user_analysis.ipynb
+	> notebooks/user_analysis.nbconvert.ipynb
 	@echo "Cleaned up logs and notebooks and csv!"
