@@ -68,19 +68,32 @@ This project fetches random user data from an API, stores it in an SQLite databa
 ```
 .
 ├── LICENSE
+├── Makefile
 ├── README.md
 ├── data
-│   └── random_users.csv
+│   ├── random_users.csv
+│   └── random_users_progress.csv
 ├── db
+│   ├── __init__.py
+│   ├── __pycache__
+│   │   ├── __init__.cpython-38.pyc
+│   │   └── schema.cpython-38.pyc
 │   └── schema.py
 ├── logs
-│   └── app.log  # Log file saved here
+│   └── app.log
 ├── notebooks
-│   └── user_analysis.ipynb
+│   ├── analysis.ipynb
+│   ├── similar_users_df.csv
+│   ├── similar_usrs.csv
+│   ├── user_analysis.ipynb
+│   └── user_analysis.nbconvert.ipynb
 ├── requirements.txt
-└── scripts
-    ├── fetch_users.py
-    └── load_data.py
+├── scripts
+│   ├── __pycache__
+│   │   └── load_data.cpython-38.pyc
+│   ├── fetch_users.py
+│   └── load_data.py
+└── users.db
 
     
 ```
