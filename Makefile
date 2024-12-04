@@ -27,6 +27,8 @@ run_analysis: fetch_users load_data
 	@echo "Workflow completed successfully!"
 
 clean_notebooks:
+	> logs/app.log
+	> notebooks/similar_usrs.csv
 	> notebooks/user_analysis.ipynb
 	> notebooks/user_analysis.nbconvert.ipynb
 
