@@ -12,7 +12,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import nbformat as nbf
 from sklearn.preprocessing import OneHotEncoder
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
+from joblib import Parallel, delayed,parallel_backend
+import joblib
+
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 
@@ -207,85 +210,225 @@ class UserAnalysis:
 
         return G
     
-    # def find_similar_users(self):
-    #     """Find similar users based on matching gender, username, or other properties."""
-    #     users = self.session.query(User).all()
-    #     similar_pairs = []
+    
+    # Step 1: Optimized Similar Users Function
+    def fetch_user_data(self, user_id):
+        """Fetch relevant user data without passing the session explicitly."""
+        
+        # Create a new session for each request if needed
+        session = Session()  # Start a new session for the current request.
+        
+        try:
+            # Assuming you need the session to fetch user data, this fetches only relevant info
+            user = session.query(User).filter(User.id == user_id).first()
+            
+            # Check if user was found
+            if user:
+                return {
+                    "username": user.username,
+                    "gender": user.gender,
+                    "employment": user.employment,
+                    "subscription": user.subscription,
+                    "address": user.address,
+                }
+            else:
+                return None  # Return None if user not found
+        finally:
+            session.close()  # Make sure to close the session after the operation
+        
+    def preprocess_user(self, user):
+        """Preprocess user fields for faster similarity comparisons."""
+        return {
+            "username": user['username'],
+            "gender": user['gender'],
+            "employment": self.simplify_employment(user['employment']),
+            "subscription": self.simplify_subscription(user['subscription']),
+            "address": self.simplify_address(user['address']),
+        }
 
-    #     for i in range(len(users)):
-    #         for j in range(i + 1, len(users)):
-    #             user1 = users[i]
-    #             user2 = users[j]
+    def calculate_similarity(self, user1_data, user2_data):
+        """Calculate similarity between two users."""
+        similarities = {}
+        user1 = self.preprocess_user(user1_data)
+        user2 = self.preprocess_user(user2_data)
+        
 
-    #             # Compare gender similarity
-    #             gender_similarity = 1 if user1.gender == user2.gender else 0
+        # Gender similarity
+        similarities["gender"] = "strong" if user1["gender"] == user2["gender"] else "none"
 
-    #             # Compare username similarity using fuzzy matching
-    #             username_similarity = fuzz.ratio(user1.username, user2.username)
+        # Username similarity
+        username_similarity = fuzz.ratio(user1["username"], user2["username"])
+        similarities["username"] = "strong" if username_similarity > 90 else "weak" if username_similarity > 70 else "none"
 
-    #             if gender_similarity or username_similarity > 80:
-    #                 similar_pairs.append((user1.username, user2.username, username_similarity, gender_similarity))
+        # Employment similarity
+        employment_similarity = fuzz.ratio(user1["employment"], user2["employment"])
+        similarities["employment"] = "strong" if employment_similarity > 90 else "weak" if employment_similarity > 70 else "none"
 
-    #     logger.info(f"Found {len(similar_pairs)} similar user pairs.")
-    #     return similar_pairs
-    def find_similar_users(self):
-        """
-        Find similar users based on matching gender, username, employment, or address properties.
-        """
-        users = self.session.query(User).all()
-        similar_pairs = []
+        # Subscription similarity
+        subscription_similarity = fuzz.ratio(user1["subscription"], user2["subscription"])
+        similarities["subscription"] = "strong" if subscription_similarity > 90 else "weak" if subscription_similarity > 70 else "none"
 
-        for i in range(len(users)):
-            for j in range(i + 1, len(users)):
-                user1 = users[i]
-                user2 = users[j]
+        # Address similarity
+        address_similarity = fuzz.ratio(user1["address"], user2["address"])
+        similarities["address"] = "strong" if address_similarity > 90 else "weak" if address_similarity > 70 else "none"
 
-                # Compare gender similarity
-                gender_similarity = 1 if user1.gender == user2.gender else 0
+        # Check if any similarity is significant
+        if any(value in ["strong", "weak"] for value in similarities.values()):
+            return {
+                "user1": user1["username"],
+                "user2": user2["username"],
+                "similarities": similarities,
+            }
+        return None
 
-                # Compare username similarity using fuzzy matching
-                username_similarity = fuzz.ratio(user1.username, user2.username)
-                
-                employ1 = self.simplify_employment(user1.employment)
-                employ2 = self.simplify_employment(user2.employment)
-                # Compare employment similarity (exact match or fuzzy matching for job titles)
-                employment_similarity = 1 if employ1 == employ2 else fuzz.ratio(employ1, employ2)
-                
-                sub1 = self.simplify_subscription(user1.subscription)
-                sub2 = self.simplify_subscription(user2.subscription)
-                # Compare subscription similarity (exact match or fuzzy matching for subscription plans)
-                subscription_similarity = 1 if sub1 == sub2 else fuzz.ratio(sub1, sub2)
+    def find_similar_users_optimized(self, users):
+        """Optimized function to find similar users without passing session directly to Parallel."""
+        # Prepare user data in advance outside of the parallel execution
+        preprocessed_users = [self.fetch_user_data(user.id) for user in users]
+        
+        # Parallelize the pairwise comparisons using preprocessed data
+        similar_pairs = Parallel(n_jobs=-1 ,backend='threading')(
+            delayed(self.calculate_similarity)(preprocessed_users[i], preprocessed_users[j])
+            for i in range(len(preprocessed_users))
+            for j in range(i + 1, len(preprocessed_users))
+        )
 
-                address1 = self.simplify_address(user1.address)
-                address2 = self.simplify_address(user2.address)
-                
-                # Compare address similarity using fuzzy matching
-                address_similarity = fuzz.ratio(address1, address2)
-
-                # Define thresholds for username, employment, and address similarities
-                if (
-                    gender_similarity
-                    or username_similarity > 80
-                    or employment_similarity > 80
-                    or address_similarity > 80
-                    or subscription_similarity > 80
-                ):
-                    similar_pairs.append(
-                        (
-                            user1.username,
-                            user2.username,
-                            username_similarity,
-                            gender_similarity,
-                            employment_similarity,
-                            address_similarity,
-                            subscription_similarity
-                        )
-                    )
-
+        # Filter out None values
+        similar_pairs = [pair for pair in similar_pairs if pair]
         logger.info(f"Found {len(similar_pairs)} similar user pairs.")
         return similar_pairs
 
-    
+    def generate_similarity_notebook(self,users,session, nb):
+        """Generate a Jupyter notebook for user similarity analysis."""
+
+        # Find similar users
+        similar_users = self.find_similar_users_optimized(users)
+
+        # Prepare DataFrame
+        similar_users_df_code = f"""
+
+        # Similar users data
+        similar_users = {similar_users}
+
+        similar_users_df = pd.DataFrame(
+            [
+                {{
+                    "User 1": pair["user1"],
+                    "User 2": pair["user2"],
+                    "Username Similarity": pair["similarities"]["username"],
+                    "Gender Match": pair["similarities"]["gender"],
+                    "Employment Similarity": pair["similarities"]["employment"],
+                    "Subscription Similarity": pair["similarities"]["subscription"],
+                    "Address Similarity": pair["similarities"]["address"],
+                }}
+                for pair in similar_users
+            ]
+        )
+
+        # Function to determine relationship strength
+        def determine_relationship_strength(similarities):
+            if "strong" in similarities.values():
+                return "strong"
+            elif "weak" in similarities.values():
+                return "weak"
+            return "none"
+
+        # Add Relationship Strength column
+        similar_users_df["Relationship Strength"] = similar_users_df.apply(
+            lambda row: determine_relationship_strength({{
+                "username": row["Username Similarity"],
+                "employment": row["Employment Similarity"],
+                "subscription": row["Subscription Similarity"],
+                "address": row["Address Similarity"],
+                "gender": row["Gender Match"],
+            }}),
+            axis=1,
+        )
+
+        # Display the DataFrame
+        similar_users_df.head()
+        """
+        nb.cells.append(nbf.v4.new_code_cell(similar_users_df_code))
+
+        # Visualization: Distribution of Relationship Strength
+        nb.cells.append(nbf.v4.new_markdown_cell("### Distribution of Relationship Strength"))
+        nb.cells.append(
+        nbf.v4.new_code_cell(
+                """
+            
+
+            plt.figure(figsize=(10, 6))
+            sns.countplot(data=similar_users_df, x="Relationship Strength", palette="coolwarm")
+            plt.title('Distribution of Relationship Strength')
+            plt.xlabel('Relationship Strength')
+            plt.ylabel('Count')
+            plt.show()
+            """
+                    )
+                )
+
+        # Visualization: Username Similarity
+        nb.cells.append(nbf.v4.new_markdown_cell("### Username Similarity Distribution"))
+        nb.cells.append(
+            nbf.v4.new_code_cell(
+                """
+    plt.figure(figsize=(8, 5))
+    sns.countplot(data=similar_users_df, x="Username Similarity", palette="Set2")
+    plt.title('Username Similarity Distribution')
+    plt.xlabel('Username Similarity')
+    plt.ylabel('Count')
+    plt.show()
+    """
+            )
+        )
+
+        # Visualization: Gender Match
+        nb.cells.append(nbf.v4.new_markdown_cell("### Gender Match Distribution"))
+        nb.cells.append(
+            nbf.v4.new_code_cell(
+                """
+    plt.figure(figsize=(8, 5))
+    sns.countplot(data=similar_users_df, x="Gender Match", palette="pastel")
+    plt.title('Gender Match Distribution')
+    plt.xlabel('Gender Match')
+    plt.ylabel('Count')
+    plt.show()
+    """
+            )
+        )
+
+        # Visualization: Subscription Similarity
+        nb.cells.append(nbf.v4.new_markdown_cell("### Subscription Similarity Distribution"))
+        nb.cells.append(
+            nbf.v4.new_code_cell(
+                """
+    plt.figure(figsize=(8, 5))
+    sns.countplot(data=similar_users_df, x="Subscription Similarity", palette="muted")
+    plt.title('Subscription Similarity Distribution')
+    plt.xlabel('Subscription Similarity')
+    plt.ylabel('Count')
+    plt.show()
+    """
+            )
+        )
+
+        # Visualization: Address Similarity
+        nb.cells.append(nbf.v4.new_markdown_cell("### Address Similarity Distribution"))
+        nb.cells.append(
+            nbf.v4.new_code_cell(
+                """
+    plt.figure(figsize=(8, 5))
+    sns.countplot(data=similar_users_df, x="Address Similarity", palette="cool")
+    plt.title('Address Similarity Distribution')
+    plt.xlabel('Address Similarity')
+    plt.ylabel('Count')
+    plt.show()
+    """
+            )
+        )
+
+       
+
     def close_session(self):
         """Close the SQLAlchemy session."""
         self.session.close()
@@ -297,6 +440,8 @@ class UserAnalysis:
     def create_notebook(self, common_properties, G_gender_employment, G_address_subscription, G_gender_subscription, G_address_gender_employment):
         # Create a new notebook
         nb = nbf.v4.new_notebook()
+        
+        
 
         # Add imports to their own cells
         nb.cells.append(nbf.v4.new_code_cell("""
@@ -428,98 +573,26 @@ class UserAnalysis:
         plot_similarity_heatmap(gender_data, employment_data_full)
         """))
         
-        nb.cells.append(nbf.v4.new_markdown_cell("### similarity between users using fuzzy match"))
+        # Step 1: Add title to the notebook
+        nb.cells.append(nbf.v4.new_markdown_cell("# Similarity Analysis of Users"))
 
-        # Step 2: Find similar users
-        similar_users = self.find_similar_users()
-
-        # Step 3: Prepare DataFrame for display
-        similar_users_df = pd.DataFrame(
-            similar_users, 
-            columns=[
-                "User 1", 
-                "User 2", 
-                "Username Similarity", 
-                "Gender Match", 
-                "Employment Similarity", 
-                "Address Similarity", 
-                "Subscription Similarity"
-            ]
-        )
-        logger.debug(f"DataFrame Head: {similar_users_df.head()}")
-   
-
-        # Add the DataFrame to the notebook
+        # Step 2: Add markdown cell for explanation
         nb.cells.append(
-        nbf.v4.new_code_cell(
-        f"""
-        similar_users_df = pd.DataFrame(
-                    {similar_users}, 
-                    columns=[
-                        "User 1", 
-                        "User 2", 
-                        "Username Similarity", 
-                        "Gender Match", 
-                        "Employment Similarity", 
-                        "Address Similarity", 
-                        "Subscription Similarity"
-                    ]
-                )               
-        """
+            nbf.v4.new_markdown_cell(
+                """
+        ### Similarity Analysis Using Fuzzy Matching
+        This notebook analyzes user similarities based on gender, username, employment, subscription, and address. 
+        Relationships are categorized as `strong`, `weak`, or `none` based on similarity scores.
+                """
+            )
         )
-        )
-        nb.cells.append(nbf.v4.new_markdown_cell("### Data preview"))
-        nb.cells.append(nbf.v4.new_code_cell("similar_users_df.head()"))
 
-        # Visualization of Username Similarity
-        nb.cells.append(nbf.v4.new_markdown_cell("### Distribution of Username Similarity in fuzzy matching"))
-        nb.cells.append(nbf.v4.new_code_cell("""
-        plt.figure(figsize=(10, 6))
-        sns.histplot(similar_users_df['Username Similarity'], kde=True, color='blue', bins=20)
-        plt.title('Distribution of Username Similarity Scores')
-        plt.xlabel('Username Similarity')
-        plt.ylabel('Frequency')
-        plt.show()
-        """))
+        # Step 3: Add section for finding similar users
+        nb.cells.append(nbf.v4.new_markdown_cell("### Similarity Between Users Using Fuzzy Match"))
+
         
-          # Visualization of Employment Similarity
-        nb.cells.append(nbf.v4.new_markdown_cell("### Distribution of Employment Similarity in fuzzy matching"))
-        nb.cells.append(nbf.v4.new_code_cell("""
-        plt.figure(figsize=(10, 6))
-        sns.histplot(similar_users_df['Employment Similarity'], kde=True, color='blue', bins=20)
-        plt.title('Distribution of Employment Similarity Scores')
-        plt.xlabel('Employment Similarity')
-        plt.ylabel('Frequency')
-        plt.show()
-        """))
-        
-        
-          # Visualization of Subscription Similarity
-        nb.cells.append(nbf.v4.new_markdown_cell("### Distribution of Subscription Similarity in fuzzy matching"))
-        nb.cells.append(nbf.v4.new_code_cell("""
-        plt.figure(figsize=(10, 6))
-        sns.histplot(similar_users_df['Employment Similarity'], kde=True, color='blue', bins=20)
-        plt.title('Distribution of Subscription Similarity Scores')
-        plt.xlabel('Subscription Similarity')
-        plt.ylabel('Frequency')
-        plt.show()
-        """))
-        
-          # Visualization of Address Similarity
-        nb.cells.append(nbf.v4.new_markdown_cell("### Distribution of Address Similarity in fuzzy matching"))
-        nb.cells.append(nbf.v4.new_code_cell("""
-        plt.figure(figsize=(10, 6))
-        sns.histplot(similar_users_df['Address Similarity'], kde=True, color='blue', bins=20)
-        plt.title('Distribution of Address Similarity Scores')
-        plt.xlabel('Address Similarity')
-        plt.ylabel('Frequency')
-        plt.show()
-        """))
+        self.generate_similarity_notebook(users, self.session,nb)    
             
-            
-
-
-
         
         # Add code for similarity network visualization
         nb.cells.append(nbf.v4.new_markdown_cell("### User Similarities Network Graphs"))
