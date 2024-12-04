@@ -7,7 +7,9 @@ This project fetches random user data from an API, stores it in an SQLite databa
 
 ## Git 
 
-- `feature/weak-strong-relationship` is an alteration of weak , strong relationship mapping using rapid fuzzy for optimization while `master` contains various visualizations using fuzzy 
+- `feature/weak-strong-relationship` is an alteration of weak , strong relationship mapping using rapid fuzzy for optimization while `master` contains various visualizations using fuzzy
+  
+- `feature/weak-strong-relationship` using joblib backend `threading` the more cores on a computer the fater the processing 
 
 
 
