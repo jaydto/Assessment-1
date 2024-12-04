@@ -2,6 +2,13 @@
 
 This project fetches random user data from an API, stores it in an SQLite database, and performs analysis on the data, including finding common properties (such as gender) and identifying similarities between users.
 
+## Git 
+
+- `feature/weak-strong-relationship` is an alteration of weak , strong relationship mapping using rapid fuzzy for optimization while `master` contains various visualizations using fuzzy 
+
+
+
+
 
 ## Features
 
