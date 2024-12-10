@@ -8,15 +8,12 @@ from db.schema import Base, User
 from collections import Counter
 from sklearn.metrics.pairwise import cosine_similarity
 import networkx as nx
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 import nbformat as nbf
 from sklearn.preprocessing import OneHotEncoder
 from rapidfuzz import fuzz
 from joblib import Parallel, delayed,parallel_backend
-import joblib
 from multiprocessing import Manager
-import json
 from functools import lru_cache
 import ast
 
@@ -366,53 +363,6 @@ class UserAnalysis:
             logger.error(f"Error in optimized similarity analysis: {e}", exc_info=True)
 
         
-            
-    # def find_similar_users_optimized(self, users):
-    #     """Optimized function to find similar users without passing session directly to Parallel."""
-        
-    #     logger.info("Starting optimized similarity analysis.")
-        
-    #     try:
-    #         # Prepare user data in advance outside of the parallel execution
-    #         logger.debug("Fetching user data for all users.")
-    #         preprocessed_users = [self.fetch_user_data(user.id) for user in users]
-    #         logger.info(f"Fetched user data for {len(preprocessed_users)} users.")
-            
-    #         # Parallelize the pairwise comparisons using preprocessed data
-    #         logger.debug("Starting pairwise similarity calculations.")
-            
-    #         # Use Manager to create a shared counter
-    #         with Manager() as manager:
-    #             progress = manager.Value('i', 0)  # Shared counter for progress
-
-    #             # Function to update progress
-    #             def update_progress(i, total):
-    #                 progress.value += 1
-    #                 # Log progress intermittently during processing
-    #                 if progress.value % 100 == 0 or progress.value == total:
-    #                     self.log_progress(progress.value, total)
-
-    #             # Function to calculate similarity and update progress
-    #             def log_progress_and_calculate_similarity(i, j):
-    #                 pair = self.calculate_similarity(preprocessed_users[i], preprocessed_users[j])
-    #                 # Update and log progress after every task
-    #                 update_progress(i, len(preprocessed_users) * (len(preprocessed_users) - 1) // 2)
-    #                 return pair
-
-    #             # Parallelize the pairwise comparisons using preprocessed data
-    #             similar_pairs = Parallel(n_jobs=-1, backend='loky')(
-    #                 delayed(log_progress_and_calculate_similarity)(i, j)
-    #                 for i in range(len(preprocessed_users))
-    #                 for j in range(i + 1, len(preprocessed_users))
-    #             )
-                
-    #             # Filter out None values
-    #             similar_pairs = [pair for pair in similar_pairs if pair]
-    #             logger.info(f"Found {len(similar_pairs)} similar user pairs.")
-    #             return similar_pairs
-            
-    #     except Exception as e:
-    #         logger.error(f"Error in optimized similarity analysis: {e}", exc_info=True)
 
     def log_progress(self, completed, total):
         """Log the progress of the task."""
@@ -556,6 +506,10 @@ class UserAnalysis:
         from collections import Counter
         import networkx as nx
         import pandas as pd
+        from mpl_toolkits.mplot3d import Axes3D
+        
+        plt.style.use('dark_background')
+
         """))
         
         
@@ -570,8 +524,17 @@ class UserAnalysis:
         nb.cells.append(nbf.v4.new_markdown_cell("### Most Common Properties"))
         nb.cells.append(nbf.v4.new_code_cell(f"""
         common_properties = {common_properties}
-        common_properties
+        
         """))
+        nb.cells.append(nbf.v4.new_code_cell("""
+        for prop, values in common_properties.items():
+            print(f"Top 5 {prop.capitalize()}:")
+            # Get the first 5 items or the whole list if it has fewer than 5 items
+            for label, count in values[:5]:
+                print(f"- {label}: {count}")
+            print()
+        
+    """))
 
         # Add code for visualizing the most common properties
         logger.debug("Adding visualization for common properties.")
@@ -595,26 +558,41 @@ class UserAnalysis:
         logger.debug("Adding pie chart generation.")
         nb.cells.append(nbf.v4.new_markdown_cell("#### Visualization of Distribution of user records in Pie Charts"))
 
-        nb.cells.append(nbf.v4.new_code_cell("""
-        def plot_pie_chart(data, title):
+        nb.cells.append(nbf.v4.new_code_cell("""      
+        def plot_pie_chart(ax,data, title):
             # Count occurrences of each category
+        
             counter = Counter(data)
             labels = counter.keys()
             sizes = counter.values()
-
-            # Plot pie chart
-            plt.figure(figsize=(8, 8))
-            plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, colors=sns.color_palette('Set3', len(labels)))
-            plt.title(title)
-            plt.axis('equal')  # Equal aspect ratio ensures that pie chart is drawn as a circle.
-            plt.show()
-
+        
+            ax.pie(
+                sizes, 
+                labels=labels, 
+                autopct='%1.1f%%', 
+                startangle=90, 
+                colors=sns.color_palette('Set3', len(labels))
+            )
+            ax.set_title(title)
+            ax.axis('equal')  # Ensures pie chart is drawn as a circle
+        
         def generate_pie_charts(gender_data, employment_data, subscription_data, address_data):
-            # Plot pie charts for each attribute
-            plot_pie_chart(gender_data, 'Gender Distribution')
-            plot_pie_chart(employment_data, 'Employment Distribution')
-            plot_pie_chart(subscription_data, 'Subscription Distribution')
-            plot_pie_chart(address_data, 'Address Distribution')
+            # Create a figure with 2x2 subplots
+            fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+        
+            # Flatten the axes for easier indexing
+            axes = axes.flatten()
+            
+            # Plot pie charts on the subplots
+            plot_pie_chart(axes[0], gender_data, 'Gender Distribution')
+            plot_pie_chart(axes[1], employment_data, 'Employment Distribution')
+            plot_pie_chart(axes[2], subscription_data, 'Subscription Distribution')
+            plot_pie_chart(axes[3], address_data, 'Address Distribution')
+        
+            # Adjust layout to prevent overlap
+            plt.tight_layout()
+            plt.show()
+                
         """))
 
         # Prepare data for each category
@@ -651,7 +629,76 @@ class UserAnalysis:
 
         # Similarity Analysis - Gender and Employment
         logger.debug("Adding similarity analysis section for Gender and Employment.")
+        nb.cells.append(nbf.v4.new_markdown_cell("### Similarity between users based on gender and employment 3d display"))
+
+        nb.cells.append(nbf.v4.new_code_cell("""       
+        def plot_similarity_heatmap_with_3d_bar(gender_data, employment_data):
+            # Validate input lengths
+            min_length = min(len(gender_data), len(employment_data))
+            gender_data = gender_data[:min_length]
+            employment_data = employment_data[:min_length]
+        
+            # Prepare the data
+            data = pd.DataFrame({
+                "Gender": gender_data,
+                "Employment": employment_data
+            })
+        
+            # Create the similarity matrix for the heatmap
+            similarity_matrix = pd.crosstab(data["Gender"], data["Employment"])
+        
+            # Prepare data for the 3D bar chart
+            gender_employment_counts = data.groupby(["Employment", "Gender"]).size().reset_index(name="Count")
+            employment_categories = gender_employment_counts["Employment"].unique()
+            gender_categories = gender_employment_counts["Gender"].unique()
+            employment_indices = pd.Categorical(gender_employment_counts["Employment"], categories=employment_categories).codes
+            gender_indices = pd.Categorical(gender_employment_counts["Gender"], categories=gender_categories).codes
+        
+            # Create a figure with two subplots
+            fig = plt.figure(figsize=(18, 8))
+        
+            # Heatmap subplot
+            ax1 = fig.add_subplot(121)
+            sns.heatmap(similarity_matrix, annot=True, fmt="d", cmap="YlGnBu", cbar=True, ax=ax1)
+            ax1.set_title("Similarity Heatmap: Gender vs. Employment")
+            ax1.set_xlabel("Employment")
+            ax1.set_ylabel("Gender")
+            ax1.tick_params(axis='x', rotation=45)
+        
+            # 3D Bar Chart subplot
+            ax2 = fig.add_subplot(122, projection='3d')
+            xpos = employment_indices
+            ypos = gender_indices
+            zpos = [0] * len(gender_employment_counts)
+            dx = dy = 0.5
+            dz = gender_employment_counts["Count"]
+            colors = plt.cm.viridis(gender_indices / len(gender_categories))
+        
+            ax2.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors, alpha=0.8)
+            ax2.set_xticks(range(len(employment_categories)))
+            ax2.set_xticklabels(employment_categories, rotation=45, ha='right', fontsize=8)
+            ax2.set_yticks(range(len(gender_categories)))
+            ax2.set_yticklabels(gender_categories)
+            ax2.set_zlabel("Count")
+            ax2.set_xlabel("Employment")
+            ax2.set_ylabel("Gender")
+            ax2.set_title("3D Bar Chart: Gender vs. Employment")
+        
+            plt.tight_layout()
+            plt.show()
+        
+
+
+
+
+
+                """))
+
+        nb.cells.append(nbf.v4.new_code_cell("""
+        plot_similarity_heatmap_with_3d_bar(gender_data, employment_data)
+                """))
         nb.cells.append(nbf.v4.new_markdown_cell("### Similarity between users based on gender and employment"))
+
         nb.cells.append(nbf.v4.new_code_cell("""
         def plot_similarity_heatmap(gender_data, employment_data):
             data = pd.DataFrame({
